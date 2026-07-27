@@ -25,6 +25,8 @@
     --c-groceries: #4fbf67;
     --c-misc: #8b949e;
     --c-outofbudget: #566073;
+
+    --accent-lavender: #8b8cf5;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
@@ -79,6 +81,37 @@
   @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
   /* ---------- Budget tab ---------- */
+  .month-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 4px 0 18px;
+  }
+  .month-nav-arrow {
+    width: 34px; height: 34px;
+    border: none; background: transparent;
+    color: var(--accent-lavender);
+    font-size: 15px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .month-nav-arrow:active { opacity: 0.6; }
+  .month-nav-label-wrap { position: relative; flex: 1; text-align: center; }
+  .month-nav-label {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .month-picker-input {
+    position: absolute; inset: 0;
+    opacity: 0;
+    width: 100%; height: 100%;
+    cursor: pointer;
+    padding: 0; border: none;
+  }
   .totals-strip { display: flex; justify-content: space-between; padding: 4px 4px 20px; }
   .totals-strip .stat { text-align: left; }
   .totals-strip .stat .num { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 22px; font-weight: 500; }
@@ -230,9 +263,16 @@
     <div class="header">
       <span class="brand"><span class="status-dot"></span>Budget</span>
       <div class="header-right">
-        <span class="brand" id="monthLabel"></span>
         <button class="refresh-btn" id="refreshBudget">&#8635;</button>
       </div>
+    </div>
+    <div class="month-nav">
+      <button class="month-nav-arrow" id="prevMonthBtn">&#10094;</button>
+      <div class="month-nav-label-wrap">
+        <div class="month-nav-label" id="monthNavLabel">This Month</div>
+        <input type="month" id="monthPickerInput" class="month-picker-input">
+      </div>
+      <button class="month-nav-arrow" id="nextMonthBtn">&#10095;</button>
     </div>
     <div id="budgetTotals" class="totals-strip"></div>
     <div id="budgetCards" class="card-grid"><div class="loading">Loading...</div></div>
@@ -425,6 +465,58 @@
   document.getElementById("refreshBudget").addEventListener("click", (e) => loadDashboard(e.currentTarget));
   document.getElementById("refreshTxns").addEventListener("click", (e) => loadDashboard(e.currentTarget));
 
+  /* ================= Budget tab: month navigation ================= */
+  let selectedMonth = new Date();
+  selectedMonth.setDate(1);
+
+  function isCurrentMonth(d) {
+    const n = new Date();
+    return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth();
+  }
+  function monthInputValue(d) {
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+  }
+  function updateMonthLabel() {
+    document.getElementById("monthNavLabel").textContent = isCurrentMonth(selectedMonth)
+      ? "This Month"
+      : selectedMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    document.getElementById("monthPickerInput").value = monthInputValue(selectedMonth);
+  }
+  document.getElementById("prevMonthBtn").addEventListener("click", () => {
+    selectedMonth.setMonth(selectedMonth.getMonth() - 1);
+    updateMonthLabel();
+    renderBudgetTab();
+  });
+  document.getElementById("nextMonthBtn").addEventListener("click", () => {
+    selectedMonth.setMonth(selectedMonth.getMonth() + 1);
+    updateMonthLabel();
+    renderBudgetTab();
+  });
+  document.getElementById("monthNavLabel").addEventListener("click", () => {
+    const input = document.getElementById("monthPickerInput");
+    if (input.showPicker) { input.showPicker(); } else { input.focus(); }
+  });
+  document.getElementById("monthPickerInput").addEventListener("change", (e) => {
+    if (!e.target.value) return;
+    const [y, m] = e.target.value.split("-");
+    selectedMonth = new Date(parseInt(y, 10), parseInt(m, 10) - 1, 1);
+    updateMonthLabel();
+    renderBudgetTab();
+  });
+  updateMonthLabel();
+
+  function actualForCategoryInMonth(category, monthDate) {
+    const year = monthDate.getFullYear();
+    const month = monthDate.getMonth();
+    return (dashboardData.transactions || [])
+      .filter(t => t.budgetCategory === category && t.type === "Expense")
+      .filter(t => {
+        const d = new Date(t.date);
+        return d.getFullYear() === year && d.getMonth() === month;
+      })
+      .reduce((sum, t) => sum + Math.abs(Number(t.value) || 0), 0);
+  }
+
   /* ================= Budget tab ================= */
   function renderBudgetTab() {
     const knownCategories = CATEGORIES["Expense"];
@@ -432,19 +524,19 @@
 
     const cards = knownCategories.map(cat => {
       const match = serverCards.find(c => c.category === cat);
+      const budgetAmt = match ? Number(match.budget) || 0 : 0;
+      const actualAmt = actualForCategoryInMonth(cat, selectedMonth);
       return {
         category: cat,
-        budget: match ? Number(match.budget) || 0 : 0,
-        actual: match ? Number(match.actual) || 0 : 0,
-        remaining: match ? Number(match.remaining) || 0 : 0
+        budget: budgetAmt,
+        actual: actualAmt,
+        remaining: budgetAmt - actualAmt
       };
     });
 
     const totalBudget = cards.reduce((s, c) => s + c.budget, 0);
     const totalActual = cards.reduce((s, c) => s + c.actual, 0);
     const totalRemaining = totalBudget - totalActual;
-
-    document.getElementById("monthLabel").textContent = new Date().toLocaleDateString(undefined, { month: "long" });
 
     document.getElementById("budgetTotals").innerHTML = `
       <div class="stat"><div class="num">${fmtMoney(totalBudget)}</div><div class="lbl">Budget</div></div>
@@ -472,14 +564,21 @@
   }
 
   function openCategoryDetail(category) {
+    const year = selectedMonth.getFullYear();
+    const month = selectedMonth.getMonth();
     const txns = (dashboardData.transactions || [])
       .filter(t => t.budgetCategory === category)
+      .filter(t => {
+        const d = new Date(t.date);
+        return d.getFullYear() === year && d.getMonth() === month;
+      })
       .sort((a, b) => new Date(b.date) - new Date(a.date));
 
-    document.getElementById("categoryDetailTitle").textContent = category;
+    const titleSuffix = isCurrentMonth(selectedMonth) ? "" : " \u00b7 " + selectedMonth.toLocaleDateString(undefined, { month: "short", year: "numeric" });
+    document.getElementById("categoryDetailTitle").textContent = category + titleSuffix;
     document.getElementById("categoryDetailList").innerHTML = txns.length
       ? renderGroupedTransactions(txns)
-      : '<div class="empty-state">No transactions in this category yet.</div>';
+      : '<div class="empty-state">No transactions in this category for this month.</div>';
 
     attachTxnRowHandlers(document.getElementById("categoryDetailList"), txns);
     document.getElementById("categoryDetail").classList.add("open");
