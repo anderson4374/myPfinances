@@ -174,6 +174,7 @@
   .chip-group { display: flex; flex-wrap: wrap; gap: 8px; }
   .chip { padding: 8px 14px; border-radius: 20px; border: 1px solid var(--border); background: var(--panel); color: var(--text-dim); font-size: 13px; cursor: pointer; white-space: nowrap; }
   .chip.selected { background: var(--panel-2); border-color: var(--text-dim); color: var(--text); }
+  .chip-sm { padding: 6px 12px; font-size: 12px; }
   .toggle-details-btn { text-align: center; color: var(--text-faint); font-size: 13px; padding: 8px 0; cursor: pointer; }
   .extra-fields-wrap { display: none; }
   .extra-fields-wrap.open { display: block; }
@@ -275,7 +276,7 @@
 
   const ACCOUNTS = ["Checking", "Savings", "CO Savings", "Cash", "WF Credit Card",
     "AMZ Credit Card", "CH Credit Card", "AX Credit Card", "CO Credit Card",
-    "CO2 Credit Card", "Webull", "Sara", "Bancolombia"];
+    "CO2 Credit Card", "Webull", "Bancolombia"];
 
   const CATEGORY_COLORS = {
     "Bills": "var(--c-bills)",
@@ -565,7 +566,7 @@
       </div>
       <div class="field subcat-field">
         <label>Sub-category</label>
-        <select class="subcat-select"></select>
+        <div class="chip-group subcat-chips"></div>
       </div>
       <div class="field">
         <label>Date</label>
@@ -573,7 +574,7 @@
       </div>
       <div class="field">
         <label>Account</label>
-        <select class="account-select"></select>
+        <div class="chip-group account-chips"></div>
       </div>
       <div class="field">
         <label>Details</label>
@@ -594,9 +595,9 @@
     const catField = container.querySelector(".cat-field");
     const catChips = container.querySelector(".cat-chips");
     const subcatField = container.querySelector(".subcat-field");
-    const subcatSelect = container.querySelector(".subcat-select");
+    const subcatChips = container.querySelector(".subcat-chips");
     const dateInput = container.querySelector(".date-input");
-    const accountSelect = container.querySelector(".account-select");
+    const accountChips = container.querySelector(".account-chips");
     const detailsInput = container.querySelector(".details-input");
     const toggleBtn = container.querySelector(".toggle-details-btn");
     const extraWrap = container.querySelector(".extra-fields-wrap");
@@ -605,6 +606,9 @@
     const deleteBtn = container.querySelector(".delete-btn");
     const resultEl = container.querySelector(".form-result");
 
+    let selectedSubCategory = initial.subCategory || null;
+    let selectedAccount = initial.account || ACCOUNTS[0];
+
     amountInput.value = initial.value !== undefined && initial.value !== null ? Math.abs(Number(initial.value)).toFixed(2) : "";
     dateInput.value = initial.date || todayInputValue();
     detailsInput.value = initial.details || "";
@@ -612,12 +616,20 @@
     submitBtn.textContent = opts.submitLabel || "Log it";
     if (opts.showDelete) deleteBtn.style.display = "block";
 
-    ACCOUNTS.forEach(a => {
-      const o = document.createElement("option");
-      o.value = a; o.textContent = a;
-      accountSelect.appendChild(o);
-    });
-    if (initial.account) accountSelect.value = initial.account;
+    function renderAccountChips() {
+      accountChips.innerHTML = "";
+      ACCOUNTS.forEach(a => {
+        const chip = document.createElement("div");
+        chip.className = "chip chip-sm" + (a === selectedAccount ? " selected" : "");
+        chip.textContent = a;
+        chip.addEventListener("click", () => {
+          selectedAccount = a;
+          renderAccountChips();
+        });
+        accountChips.appendChild(chip);
+      });
+    }
+    renderAccountChips();
 
     ["Expense", "Income", "Transfer Out", "Transfer In"].forEach(type => {
       const btn = document.createElement("div");
@@ -660,25 +672,25 @@
       if (currentType === "Expense") {
         subcatField.style.display = "block";
         const subOpts = SUB_CATEGORY_MAP[selectedCategory] || [];
-        subcatSelect.innerHTML = "";
+        if (!subOpts.includes(selectedSubCategory)) selectedSubCategory = subOpts[0] || null;
+
+        subcatChips.innerHTML = "";
         subOpts.forEach(s => {
-          const o = document.createElement("option");
-          o.value = s; o.textContent = s;
-          subcatSelect.appendChild(o);
+          const chip = document.createElement("div");
+          chip.className = "chip chip-sm" + (s === selectedSubCategory ? " selected" : "");
+          chip.textContent = s;
+          chip.addEventListener("click", () => {
+            selectedSubCategory = s;
+            renderCategoryUI();
+          });
+          subcatChips.appendChild(chip);
         });
-        if (initial.subCategory && subOpts.includes(initial.subCategory)) {
-          subcatSelect.value = initial.subCategory;
-        }
       } else {
         subcatField.style.display = "none";
+        selectedSubCategory = null;
       }
     }
     renderCategoryUI();
-    if (initial.subCategory) {
-      // re-apply after initial render in case category matched on first pass
-      const subOpts = SUB_CATEGORY_MAP[selectedCategory] || [];
-      if (subOpts.includes(initial.subCategory)) subcatSelect.value = initial.subCategory;
-    }
 
     function updateSignToggleVisual() {
       signToggle.classList.toggle("active", forceNegative);
@@ -717,10 +729,10 @@
         key: SECRET_KEY,
         type: currentType,
         budgetCategory: selectedCategory || "",
-        subCategory: currentType === "Expense" ? subcatSelect.value : "",
+        subCategory: currentType === "Expense" ? (selectedSubCategory || "") : "",
         details: detailsInput.value,
         value: signedValue,
-        account: accountSelect.value,
+        account: selectedAccount || "",
         comments: commentsInput.value,
         date: dateInput.value
       };
