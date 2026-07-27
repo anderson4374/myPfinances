@@ -206,7 +206,7 @@
   }
   .chip-group { display: flex; flex-wrap: wrap; gap: 6px; }
   .chip { padding: 7px 13px; border-radius: 18px; border: 1px solid var(--border); background: var(--panel); color: var(--text-dim); font-size: 12px; cursor: pointer; white-space: nowrap; }
-  .chip.selected { background: var(--panel-2); border-color: var(--text-dim); color: var(--text); }
+  .chip.selected { background: rgba(139, 140, 245, 0.22); border-color: var(--accent-lavender); color: var(--accent-lavender); font-weight: 600; }
   .chip-sm { padding: 5px 11px; font-size: 11px; }
   .toggle-details-btn { text-align: center; color: var(--text-faint); font-size: 12px; padding: 4px 0; cursor: pointer; }
   .extra-fields-wrap { display: none; }
@@ -800,7 +800,7 @@
     const resultEl = container.querySelector(".form-result");
 
     let selectedSubCategory = initial.subCategory || null;
-    let selectedAccount = initial.account || ACCOUNTS[0];
+    let selectedAccount = initial.account || null;
 
     amountInput.value = initial.value !== undefined && initial.value !== null ? Math.abs(Number(initial.value)).toFixed(2) : "";
     dateInput.value = initial.date || todayInputValue();
@@ -816,7 +816,7 @@
         chip.className = "chip chip-sm" + (a === selectedAccount ? " selected" : "");
         chip.textContent = a;
         chip.addEventListener("click", () => {
-          selectedAccount = a;
+          selectedAccount = (selectedAccount === a) ? null : a;
           renderAccountChips();
         });
         accountChips.appendChild(chip);
@@ -848,7 +848,7 @@
       }
       catField.style.display = "block";
       const opts2 = CATEGORIES[currentType] || [];
-      if (!opts2.includes(selectedCategory)) selectedCategory = opts2[0];
+      if (selectedCategory && !opts2.includes(selectedCategory)) selectedCategory = null;
 
       catChips.innerHTML = "";
       opts2.forEach(o => {
@@ -856,16 +856,16 @@
         chip.className = "chip" + (o === selectedCategory ? " selected" : "");
         chip.textContent = o;
         chip.addEventListener("click", () => {
-          selectedCategory = o;
+          selectedCategory = (selectedCategory === o) ? null : o;
           renderCategoryUI();
         });
         catChips.appendChild(chip);
       });
 
-      if (currentType === "Expense") {
+      if (currentType === "Expense" && selectedCategory) {
         subcatField.style.display = "block";
         const subOpts = SUB_CATEGORY_MAP[selectedCategory] || [];
-        if (!subOpts.includes(selectedSubCategory)) selectedSubCategory = subOpts[0] || null;
+        if (selectedSubCategory && !subOpts.includes(selectedSubCategory)) selectedSubCategory = null;
 
         subcatChips.innerHTML = "";
         subOpts.forEach(s => {
@@ -873,7 +873,7 @@
           chip.className = "chip chip-sm" + (s === selectedSubCategory ? " selected" : "");
           chip.textContent = s;
           chip.addEventListener("click", () => {
-            selectedSubCategory = s;
+            selectedSubCategory = (selectedSubCategory === s) ? null : s;
             renderCategoryUI();
           });
           subcatChips.appendChild(chip);
