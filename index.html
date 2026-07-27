@@ -112,9 +112,9 @@
     cursor: pointer;
     padding: 0; border: none;
   }
-  .totals-strip { display: flex; justify-content: space-between; padding: 4px 4px 20px; }
-  .totals-strip .stat { text-align: left; }
-  .totals-strip .stat .num { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 22px; font-weight: 500; }
+  .totals-strip { display: flex; justify-content: space-between; gap: 10px; padding: 4px 4px 20px; }
+  .totals-strip .stat { text-align: left; flex: 1; min-width: 0; }
+  .totals-strip .stat .num { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 18px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .totals-strip .stat .lbl { font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
 
   .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -508,13 +508,14 @@
   function actualForCategoryInMonth(category, monthDate) {
     const year = monthDate.getFullYear();
     const month = monthDate.getMonth();
-    return (dashboardData.transactions || [])
+    const netSum = (dashboardData.transactions || [])
       .filter(t => t.budgetCategory === category && t.type === "Expense")
       .filter(t => {
         const d = new Date(t.date);
         return d.getFullYear() === year && d.getMonth() === month;
       })
-      .reduce((sum, t) => sum + Math.abs(Number(t.value) || 0), 0);
+      .reduce((sum, t) => sum + (Number(t.value) || 0), 0);
+    return Math.abs(netSum);
   }
 
   /* ================= Budget tab ================= */
