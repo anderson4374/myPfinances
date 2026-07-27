@@ -187,10 +187,11 @@
   }
   .sign-toggle.active { background: rgba(224, 82, 82, 0.16); border-color: var(--danger); color: var(--danger); }
 
-  .type-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-bottom: 12px; }
+  .type-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px; }
   .type-btn { padding: 9px 4px; border-radius: 9px; border: 1px solid var(--border); background: var(--panel); color: var(--text-dim); font-size: 12px; font-weight: 600; text-align: center; cursor: pointer; letter-spacing: 0.01em; }
-  .type-btn.active[data-type="Expense"], .type-btn.active[data-type="Transfer Out"] { background: rgba(232, 163, 61, 0.14); border-color: var(--expense); color: var(--expense); }
-  .type-btn.active[data-type="Income"], .type-btn.active[data-type="Transfer In"] { background: rgba(45, 212, 167, 0.14); border-color: var(--income); color: var(--income); }
+  .type-btn.active[data-type="Expense"] { background: rgba(232, 163, 61, 0.14); border-color: var(--expense); color: var(--expense); }
+  .type-btn.active[data-type="Income"] { background: rgba(45, 212, 167, 0.14); border-color: var(--income); color: var(--income); }
+  .type-btn.active[data-type="Transfer"] { background: rgba(139, 140, 245, 0.16); border-color: var(--accent-lavender); color: var(--accent-lavender); }
 
   .field { margin-bottom: 9px; }
   .field label { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); margin-bottom: 4px; font-weight: 600; }
@@ -742,9 +743,10 @@
   /* ================= Shared entry form builder ================= */
   function createEntryForm(container, opts) {
     const initial = opts.initial || {};
-    let currentType = initial.type || "Expense";
+    const originalRawType = initial.type || "Expense";
+    let currentType = (originalRawType === "Transfer In" || originalRawType === "Transfer Out") ? "Transfer" : originalRawType;
     let selectedCategory = initial.budgetCategory || null;
-    let forceNegative = Number(initial.value) < 0 && (currentType === "Income" || currentType === "Transfer In");
+    let forceNegative = Number(initial.value) < 0 && (originalRawType === "Income" || originalRawType === "Transfer In");
 
     container.innerHTML = `
       <div class="amount-row">
@@ -765,11 +767,19 @@
         <label>Date</label>
         <input type="date" class="date-input">
       </div>
-      <div class="field">
+      <div class="field account-field">
         <label>Account</label>
         <div class="chip-group account-chips"></div>
       </div>
-      <div class="field">
+      <div class="field from-account-field">
+        <label>From account</label>
+        <div class="chip-group from-account-chips"></div>
+      </div>
+      <div class="field to-account-field">
+        <label>To account</label>
+        <div class="chip-group to-account-chips"></div>
+      </div>
+      <div class="field details-field">
         <label>Details</label>
         <input type="text" class="details-input" placeholder="What was it for?">
       </div>
@@ -790,7 +800,13 @@
     const subcatField = container.querySelector(".subcat-field");
     const subcatChips = container.querySelector(".subcat-chips");
     const dateInput = container.querySelector(".date-input");
+    const accountField = container.querySelector(".account-field");
     const accountChips = container.querySelector(".account-chips");
+    const fromAccountField = container.querySelector(".from-account-field");
+    const fromAccountChips = container.querySelector(".from-account-chips");
+    const toAccountField = container.querySelector(".to-account-field");
+    const toAccountChips = container.querySelector(".to-account-chips");
+    const detailsField = container.querySelector(".details-field");
     const detailsInput = container.querySelector(".details-input");
     const toggleBtn = container.querySelector(".toggle-details-btn");
     const extraWrap = container.querySelector(".extra-fields-wrap");
@@ -799,8 +815,12 @@
     const deleteBtn = container.querySelector(".delete-btn");
     const resultEl = container.querySelector(".form-result");
 
+    const isTransferCreate = opts.allowTransferPair === true;
+
     let selectedSubCategory = initial.subCategory || null;
     let selectedAccount = initial.account || null;
+    let selectedFromAccount = null;
+    let selectedToAccount = null;
 
     amountInput.value = initial.value !== undefined && initial.value !== null ? Math.abs(Number(initial.value)).toFixed(2) : "";
     dateInput.value = initial.date || todayInputValue();
@@ -809,22 +829,30 @@
     submitBtn.textContent = opts.submitLabel || "Log it";
     if (opts.showDelete) deleteBtn.style.display = "block";
 
-    function renderAccountChips() {
-      accountChips.innerHTML = "";
-      ACCOUNTS.forEach(a => {
-        const chip = document.createElement("div");
-        chip.className = "chip chip-sm" + (a === selectedAccount ? " selected" : "");
-        chip.textContent = a;
-        chip.addEventListener("click", () => {
-          selectedAccount = (selectedAccount === a) ? null : a;
-          renderAccountChips();
+    function makeChipRenderer(chipsEl, getSelected, setSelected, options) {
+      return function render() {
+        chipsEl.innerHTML = "";
+        options.forEach(a => {
+          const chip = document.createElement("div");
+          chip.className = "chip chip-sm" + (a === getSelected() ? " selected" : "");
+          chip.textContent = a;
+          chip.addEventListener("click", () => {
+            setSelected(getSelected() === a ? null : a);
+            render();
+          });
+          chipsEl.appendChild(chip);
         });
-        accountChips.appendChild(chip);
-      });
+      };
     }
-    renderAccountChips();
 
-    ["Expense", "Income", "Transfer Out", "Transfer In"].forEach(type => {
+    const renderAccountChips = makeChipRenderer(accountChips, () => selectedAccount, (v) => selectedAccount = v, ACCOUNTS);
+    const renderFromAccountChips = makeChipRenderer(fromAccountChips, () => selectedFromAccount, (v) => selectedFromAccount = v, ACCOUNTS);
+    const renderToAccountChips = makeChipRenderer(toAccountChips, () => selectedToAccount, (v) => selectedToAccount = v, ACCOUNTS);
+    renderAccountChips();
+    renderFromAccountChips();
+    renderToAccountChips();
+
+    ["Expense", "Income", "Transfer"].forEach(type => {
       const btn = document.createElement("div");
       btn.className = "type-btn" + (type === currentType ? " active" : "");
       btn.dataset.type = type;
@@ -834,13 +862,38 @@
         btn.classList.add("active");
         currentType = type;
         renderCategoryUI();
+        updateFieldVisibility();
         updateSignToggleVisual();
       });
       typeRow.appendChild(btn);
     });
 
+    function updateFieldVisibility() {
+      if (currentType === "Transfer") {
+        signToggle.style.display = "none";
+        if (isTransferCreate) {
+          accountField.style.display = "none";
+          fromAccountField.style.display = "block";
+          toAccountField.style.display = "block";
+          detailsField.style.display = "none";
+        } else {
+          accountField.style.display = "block";
+          fromAccountField.style.display = "none";
+          toAccountField.style.display = "none";
+          detailsField.style.display = "block";
+        }
+      } else {
+        signToggle.style.display = "block";
+        accountField.style.display = "block";
+        fromAccountField.style.display = "none";
+        toAccountField.style.display = "none";
+        detailsField.style.display = "block";
+      }
+    }
+    updateFieldVisibility();
+
     function renderCategoryUI() {
-      if (currentType === "Transfer Out" || currentType === "Transfer In") {
+      if (currentType === "Transfer") {
         catField.style.display = "none";
         subcatField.style.display = "none";
         selectedCategory = null;
@@ -903,26 +956,70 @@
       toggleBtn.textContent = "- Hide comment";
     }
 
-    function computeSignedValue() {
+    function computeSignedValue(typeForSign) {
       const numeric = parseFloat(amountInput.value);
       if (isNaN(numeric)) return null;
       if (forceNegative) return -Math.abs(numeric);
-      if (currentType === "Expense" || currentType === "Transfer Out") return -Math.abs(numeric);
+      if (typeForSign === "Expense" || typeForSign === "Transfer Out") return -Math.abs(numeric);
       return Math.abs(numeric);
     }
 
+    function showError(msg) {
+      resultEl.className = "form-result show";
+      resultEl.innerHTML = `<div class="label">Error</div><div class="value"><span class="error-text">${msg}</span></div>`;
+    }
+
     submitBtn.addEventListener("click", async () => {
-      const signedValue = computeSignedValue();
+      // ---- New transfer creation: builds two paired rows ----
+      if (currentType === "Transfer" && isTransferCreate) {
+        const numeric = parseFloat(amountInput.value);
+        if (isNaN(numeric) || numeric <= 0) { showError("Enter a valid amount"); return; }
+        if (!selectedFromAccount || !selectedToAccount) { showError("Select both accounts"); return; }
+        if (selectedFromAccount === selectedToAccount) { showError("From and To accounts must be different"); return; }
+
+        submitBtn.disabled = true;
+        const originalLabel = submitBtn.textContent;
+        submitBtn.textContent = "Saving...";
+
+        const base = {
+          budgetCategory: "",
+          subCategory: "",
+          details: "Transfer",
+          comments: commentsInput.value,
+          date: dateInput.value
+        };
+        const outPayload = { ...base, type: "Transfer Out", account: selectedFromAccount, value: -Math.abs(numeric) };
+        const inPayload = { ...base, type: "Transfer In", account: selectedToAccount, value: Math.abs(numeric) };
+
+        const r1 = await opts.onSubmit(outPayload);
+        const r2 = await opts.onSubmit(inPayload);
+
+        if (r1.success && r2.success) {
+          resultEl.className = "form-result show positive";
+          resultEl.innerHTML = `<div class="label">Transfer logged</div><div class="value">${fmtMoney(numeric)}</div>`;
+          amountInput.value = "";
+          commentsInput.value = "";
+        } else {
+          showError((r1.error || r2.error) || "Something went wrong");
+        }
+
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalLabel;
+        return;
+      }
+
+      // ---- Normal single-row submit (Expense, Income, or editing an existing Transfer leg) ----
+      const typeForSign = (currentType === "Transfer") ? originalRawType : currentType;
+      const signedValue = computeSignedValue(typeForSign);
       if (signedValue === null) {
-        resultEl.className = "form-result show";
-        resultEl.innerHTML = '<div class="label">Error</div><div class="value"><span class="error-text">Enter a valid amount</span></div>';
+        showError("Enter a valid amount");
         return;
       }
       const payload = {
-        type: currentType,
+        type: typeForSign,
         budgetCategory: selectedCategory || "",
         subCategory: currentType === "Expense" ? (selectedSubCategory || "") : "",
-        details: detailsInput.value,
+        details: currentType === "Transfer" ? (detailsInput.value || "Transfer") : detailsInput.value,
         value: signedValue,
         account: selectedAccount || "",
         comments: commentsInput.value,
@@ -944,8 +1041,7 @@
           commentsInput.value = "";
         }
       } else {
-        resultEl.className = "form-result show";
-        resultEl.innerHTML = `<div class="label">Error</div><div class="value"><span class="error-text">${data.error || "Something went wrong"}</span></div>`;
+        showError(data.error || "Something went wrong");
       }
       submitBtn.disabled = false;
       submitBtn.textContent = originalLabel;
@@ -963,6 +1059,7 @@
   createEntryForm(document.getElementById("logFormContainer"), {
     initial: { type: "Expense", date: todayInputValue() },
     submitLabel: "Log it",
+    allowTransferPair: true,
     onSubmit: async (payload) => {
       const result = await sendToScript(payload);
       if (result.success) loadDashboard();
