@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Ledger</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel-2: #1c2430;
+    --border: #2a3240;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --text-faint: #566073;
+    --income: #2dd4a7;
+    --expense: #e8a33d;
+    --danger: #e05252;
+
+    --c-bills: #5b8def;
+    --c-fun: #d768e0;
+    --c-gas: #e8a33d;
+    --c-groceries: #4fbf67;
+    --c-misc: #8b949e;
+    --c-outofbudget: #566073;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+    height: 100%;
+    overflow-x: hidden;
+  }
+  #app {
+    max-width: 480px;
+    margin: 0 auto;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  .screen { display: none; flex: 1; padding: env(safe-area-inset-top) 16px 110px; }
+  .screen.active { display: block; }
+
+  .header {
+    padding: 12px 0 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header .brand {
+    font-size: 13px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    font-weight: 600;
+  }
+  .header .status-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--income);
+    display: inline-block;
+    margin-right: 6px;
+  }
+  .header-right { display: flex; align-items: center; gap: 10px; }
+  .refresh-btn {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text-dim);
+    font-size: 15px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .refresh-btn.spinning { animation: spin 0.7s linear infinite; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  /* ---------- Budget tab ---------- */
+  .totals-strip { display: flex; justify-content: space-between; padding: 4px 4px 20px; }
+  .totals-strip .stat { text-align: left; }
+  .totals-strip .stat .num { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 22px; font-weight: 500; }
+  .totals-strip .stat .lbl { font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+
+  .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .budget-card { background: var(--panel); border-radius: 14px; padding: 14px; border-left: 3px solid var(--cat-color, var(--text-faint)); cursor: pointer; }
+  .budget-card:active { transform: scale(0.97); }
+  .budget-card .cat-name { font-size: 13px; font-weight: 600; margin-bottom: 10px; color: var(--text); }
+  .budget-card .row { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-dim); margin-bottom: 3px; }
+  .budget-card .row .v { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: var(--text); }
+  .budget-card .remaining-row { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: baseline; }
+  .budget-card .remaining-row .lbl { font-size: 11px; color: var(--text-faint); text-transform: uppercase; }
+  .budget-card .remaining-row .v { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 17px; font-weight: 600; }
+  .budget-card .remaining-row .v.neg { color: var(--danger); }
+  .budget-card .remaining-row .v.pos { color: var(--income); }
+
+  .bar-track { height: 4px; border-radius: 2px; background: var(--border); margin: 8px 0 10px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 2px; background: var(--cat-color, var(--text-faint)); }
+
+  /* ---------- Overlays ---------- */
+  .detail-overlay {
+    position: absolute; inset: 0; background: var(--bg);
+    display: none; flex-direction: column; z-index: 10;
+    padding: env(safe-area-inset-top) 16px 24px; overflow-y: auto;
+  }
+  .detail-overlay.open { display: flex; }
+  .detail-header { display: flex; align-items: center; gap: 10px; padding: 20px 0 16px; }
+  .back-btn { background: var(--panel); border: 1px solid var(--border); color: var(--text); border-radius: 10px; width: 36px; height: 36px; font-size: 18px; cursor: pointer; flex-shrink: 0; }
+  .detail-header .title { font-size: 17px; font-weight: 600; }
+
+  /* ---------- Transaction rows ---------- */
+  .date-group { margin-bottom: 18px; }
+  .date-group .date-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); margin-bottom: 8px; font-weight: 600; }
+  .txn-row { display: flex; align-items: center; gap: 10px; background: var(--panel); border-radius: 10px; padding: 12px 14px; margin-bottom: 6px; cursor: pointer; }
+  .txn-row:active { background: var(--panel-2); }
+  .txn-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--cat-color, var(--text-faint)); }
+  .txn-mid { flex: 1; min-width: 0; }
+  .txn-mid .txn-cat { font-size: 15px; color: var(--text); font-weight: 600; }
+  .txn-mid .txn-details { font-size: 12px; color: var(--text-dim); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .txn-value { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 15px; font-weight: 600; flex-shrink: 0; }
+  .txn-value.neg { color: var(--danger); }
+  .txn-value.pos { color: var(--income); }
+
+  .empty-state { text-align: center; color: var(--text-faint); padding: 60px 20px; font-size: 14px; }
+  .loading { text-align: center; color: var(--text-faint); padding: 40px 0; font-size: 13px; }
+
+  /* ---------- Read-only detail view ---------- */
+  .detail-kv { background: var(--panel); border-radius: 12px; padding: 14px; margin-bottom: 16px; }
+  .detail-kv div { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--border); }
+  .detail-kv div:last-child { border-bottom: none; }
+  .detail-kv span.k { color: var(--text-faint); }
+  .detail-kv span.v { color: var(--text); font-weight: 500; text-align: right; }
+  .detail-actions { display: flex; gap: 10px; }
+  .btn-secondary, .btn-danger {
+    flex: 1; padding: 13px; border-radius: 12px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--text); font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .btn-danger { border-color: var(--danger); color: var(--danger); }
+
+  /* ---------- Shared entry form (Log tab + Edit modal) ---------- */
+  .amount-row { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 0 12px; }
+  .dollar-sign { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 32px; color: var(--text-faint); }
+  .amount-input {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 38px; font-weight: 500; background: transparent; border: none;
+    color: var(--text); text-align: left; width: 150px; outline: none; caret-color: var(--income);
+  }
+  .amount-input::placeholder { color: var(--text-faint); }
+  .sign-toggle {
+    width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--text-dim); font-size: 17px; font-weight: 600; cursor: pointer; flex-shrink: 0;
+  }
+  .sign-toggle.active { background: rgba(224, 82, 82, 0.16); border-color: var(--danger); color: var(--danger); }
+
+  .type-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-bottom: 12px; }
+  .type-btn { padding: 9px 4px; border-radius: 9px; border: 1px solid var(--border); background: var(--panel); color: var(--text-dim); font-size: 12px; font-weight: 600; text-align: center; cursor: pointer; letter-spacing: 0.01em; }
+  .type-btn.active[data-type="Expense"], .type-btn.active[data-type="Transfer Out"] { background: rgba(232, 163, 61, 0.14); border-color: var(--expense); color: var(--expense); }
+  .type-btn.active[data-type="Income"], .type-btn.active[data-type="Transfer In"] { background: rgba(45, 212, 167, 0.14); border-color: var(--income); color: var(--income); }
+
+  .field { margin-bottom: 9px; }
+  .field label { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); margin-bottom: 4px; font-weight: 600; }
+  select, input[type="text"], input[type="date"], textarea {
+    width: 100%; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 9px; padding: 9px 12px; color: var(--text); font-size: 14px;
+    font-family: inherit; outline: none; appearance: none; -webkit-appearance: none;
+  }
+  input[type="date"] { color-scheme: dark; }
+  select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238b949e' stroke-width='1.5' fill='none' fill-rule='evenodd'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px;
+  }
+  .chip-group { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { padding: 7px 13px; border-radius: 18px; border: 1px solid var(--border); background: var(--panel); color: var(--text-dim); font-size: 12px; cursor: pointer; white-space: nowrap; }
+  .chip.selected { background: var(--panel-2); border-color: var(--text-dim); color: var(--text); }
+  .chip-sm { padding: 5px 11px; font-size: 11px; }
+  .toggle-details-btn { text-align: center; color: var(--text-faint); font-size: 12px; padding: 4px 0; cursor: pointer; }
+  .extra-fields-wrap { display: none; }
+  .extra-fields-wrap.open { display: block; }
+  .submit-btn { width: 100%; padding: 13px; border-radius: 11px; border: none; background: var(--text); color: var(--bg); font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 4px; }
+  .submit-btn:active { transform: scale(0.98); }
+  .submit-btn:disabled { opacity: 0.5; }
+  .delete-btn { width: 100%; padding: 14px; border-radius: 12px; border: 1px solid var(--danger); background: transparent; color: var(--danger); font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 10px; }
+  .form-result { margin-top: 10px; padding: 12px; border-radius: 11px; background: var(--panel); border: 1px solid var(--border); text-align: center; display: none; }
+  .form-result.show { display: block; }
+  .form-result .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); margin-bottom: 3px; font-weight: 600; }
+  .form-result .value { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 22px; font-weight: 500; }
+  .form-result.negative .value { color: var(--danger); }
+  .form-result.positive .value { color: var(--income); }
+  .form-result .error-text { color: var(--danger); font-size: 14px; }
+
+  /* ---------- Bottom tab bar ---------- */
+  .tab-bar {
+    position: fixed; bottom: 14px; left: 16px; right: 16px; max-width: 448px; margin: 0 auto;
+    background: rgba(22, 27, 34, 0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border); border-radius: 20px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    display: flex; padding: 8px 4px calc(env(safe-area-inset-bottom) * 0.4 + 8px);
+  }
+  .tab-item { flex: 1; text-align: center; color: var(--text-faint); font-size: 11px; font-weight: 600; cursor: pointer; padding: 4px 0 2px; }
+  .tab-item.active { color: var(--income); }
+  .tab-item .icon {
+    font-size: 18px; width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 3px; transition: background 0.15s ease;
+  }
+  .tab-item.active .icon { background: rgba(45, 212, 167, 0.16); }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ============ BUDGET TAB ============ -->
+  <div class="screen active" id="screen-budget" style="position: relative;">
+    <div class="header">
+      <span class="brand"><span class="status-dot"></span>Budget</span>
+      <div class="header-right">
+        <span class="brand" id="monthLabel"></span>
+        <button class="refresh-btn" id="refreshBudget">&#8635;</button>
+      </div>
+    </div>
+    <div id="budgetTotals" class="totals-strip"></div>
+    <div id="budgetCards" class="card-grid"><div class="loading">Loading...</div></div>
+
+    <div class="detail-overlay" id="categoryDetail">
+      <div class="detail-header">
+        <button class="back-btn" id="closeCategoryDetail">&#8592;</button>
+        <div class="title" id="categoryDetailTitle">Category</div>
+      </div>
+      <div id="categoryDetailList"></div>
+    </div>
+  </div>
+
+  <!-- ============ TRANSACTIONS TAB ============ -->
+  <div class="screen" id="screen-transactions" style="position: relative;">
+    <div class="header">
+      <span class="brand"><span class="status-dot"></span>Transactions</span>
+      <button class="refresh-btn" id="refreshTxns">&#8635;</button>
+    </div>
+    <div id="transactionsList"><div class="loading">Loading...</div></div>
+
+    <div class="detail-overlay" id="txnDetailOverlay">
+      <div class="detail-header">
+        <button class="back-btn" id="closeTxnDetail">&#8592;</button>
+        <div class="title">Details</div>
+      </div>
+      <div id="txnDetailBody"></div>
+    </div>
+  </div>
+
+  <!-- ============ LOG TAB ============ -->
+  <div class="screen" id="screen-log">
+    <div class="header"><span class="brand"><span class="status-dot"></span>Log</span></div>
+    <div id="logFormContainer"></div>
+  </div>
+
+  <div class="tab-bar">
+    <div class="tab-item active" data-tab="budget"><span class="icon">&#9635;</span>Budget</div>
+    <div class="tab-item" data-tab="transactions"><span class="icon">&#8801;</span>Activity</div>
+    <div class="tab-item" data-tab="log"><span class="icon">&#43;</span>Log</div>
+  </div>
+
+</div>
+
+<script>
+  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxoffQ0IxlB6JtF5oHwxF1wyfjzSbaBRu5DBJru2Xdmrc1ilcNxCVDc9Ozy5VeJaeAKzQ/exec";
+  const SECRET_KEY = "SECRET ANDERSON";
+
+  const CATEGORIES = {
+    "Expense": ["Bills", "Fun", "Gas & Tolls", "Groceries", "Misc", "Out of budget"],
+    "Income": ["Salary", "Others"]
+  };
+
+  const SUB_CATEGORY_MAP = {
+    "Bills": ["Subscriptions", "Utilities", "Donations", "Home", "Transportation"],
+    "Groceries": ["N/A"],
+    "Gas & Tolls": ["Transportation"],
+    "Fun": ["Eating out", "Drinks", "Entertainment"],
+    "Misc": ["Eating out", "Finances", "Clothing", "Gadgets", "Gifts", "Health", "Errands"],
+    "Out of budget": ["Trading", "Travel"]
+  };
+
+  const ACCOUNTS = ["Checking", "Savings", "CO Savings", "Cash", "WF Credit Card",
+    "AMZ Credit Card", "CH Credit Card", "AX Credit Card", "CO Credit Card",
+    "CO2 Credit Card", "Webull", "Bancolombia"];
+
+  const CATEGORY_COLORS = {
+    "Bills": "var(--c-bills)",
+    "Fun": "var(--c-fun)",
+    "Gas & Tolls": "var(--c-gas)",
+    "Groceries": "var(--c-groceries)",
+    "Misc": "var(--c-misc)",
+    "Out of budget": "var(--c-outofbudget)"
+  };
+
+  let dashboardData = { budget: [], transactions: [] };
+
+  function fmtMoney(n) {
+    const num = Number(n) || 0;
+    return "$" + num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function fmtDate(iso) {
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  }
+  function catColor(cat) { return CATEGORY_COLORS[cat] || "var(--c-outofbudget)"; }
+  function todayInputValue() {
+    const d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  function isoToInputValue(iso) {
+    const d = new Date(iso);
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+
+  /* ================= Tab switching ================= */
+  document.querySelectorAll(".tab-item").forEach(tab => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".tab-item").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+      tab.classList.add("active");
+      document.getElementById("screen-" + tab.dataset.tab).classList.add("active");
+    });
+  });
+
+  /* ================= Load dashboard ================= */
+  async function loadDashboard(refreshBtn) {
+    if (refreshBtn) refreshBtn.classList.add("spinning");
+    try {
+      const url = SCRIPT_URL + "?key=" + encodeURIComponent(SECRET_KEY) + "&action=dashboard";
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.success) {
+        dashboardData = data;
+        renderBudgetTab();
+        renderTransactionsTab();
+      }
+    } catch (err) {
+      document.getElementById("budgetCards").innerHTML = '<div class="empty-state">Couldn\'t load data. Try refreshing.</div>';
+      document.getElementById("transactionsList").innerHTML = '<div class="empty-state">Couldn\'t load data. Try refreshing.</div>';
+    } finally {
+      if (refreshBtn) refreshBtn.classList.remove("spinning");
+    }
+  }
+  document.getElementById("refreshBudget").addEventListener("click", (e) => loadDashboard(e.currentTarget));
+  document.getElementById("refreshTxns").addEventListener("click", (e) => loadDashboard(e.currentTarget));
+
+  /* ================= Budget tab ================= */
+  function renderBudgetTab() {
+    const knownCategories = CATEGORIES["Expense"];
+    const serverCards = dashboardData.budget || [];
+
+    const cards = knownCategories.map(cat => {
+      const match = serverCards.find(c => c.category === cat);
+      return {
+        category: cat,
+        budget: match ? Number(match.budget) || 0 : 0,
+        actual: match ? Number(match.actual) || 0 : 0,
+        remaining: match ? Number(match.remaining) || 0 : 0
+      };
+    });
+
+    const totalBudget = cards.reduce((s, c) => s + c.budget, 0);
+    const totalActual = cards.reduce((s, c) => s + c.actual, 0);
+    const totalRemaining = totalBudget - totalActual;
+
+    document.getElementById("monthLabel").textContent = new Date().toLocaleDateString(undefined, { month: "long" });
+
+    document.getElementById("budgetTotals").innerHTML = `
+      <div class="stat"><div class="num">${fmtMoney(totalBudget)}</div><div class="lbl">Budget</div></div>
+      <div class="stat"><div class="num">${fmtMoney(totalActual)}</div><div class="lbl">Actual</div></div>
+      <div class="stat"><div class="num" style="color:${totalRemaining < 0 ? 'var(--danger)' : 'var(--income)'}">${fmtMoney(totalRemaining)}</div><div class="lbl">Remaining</div></div>
+    `;
+
+    document.getElementById("budgetCards").innerHTML = cards.map(c => {
+      const pct = c.budget > 0 ? Math.min(100, (c.actual / c.budget) * 100) : 0;
+      const remClass = c.remaining < 0 ? "neg" : "pos";
+      return `
+        <div class="budget-card" style="--cat-color:${catColor(c.category)}" data-cat="${c.category}">
+          <div class="cat-name">${c.category}</div>
+          <div class="row"><span>Budget</span><span class="v">${fmtMoney(c.budget)}</span></div>
+          <div class="row"><span>Actual</span><span class="v">${fmtMoney(c.actual)}</span></div>
+          <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+          <div class="remaining-row"><span class="lbl">Left</span><span class="v ${remClass}">${fmtMoney(c.remaining)}</span></div>
+        </div>
+      `;
+    }).join("");
+
+    document.querySelectorAll(".budget-card").forEach(card => {
+      card.addEventListener("click", () => openCategoryDetail(card.dataset.cat));
+    });
+  }
+
+  function openCategoryDetail(category) {
+    const txns = (dashboardData.transactions || [])
+      .filter(t => t.budgetCategory === category)
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    document.getElementById("categoryDetailTitle").textContent = category;
+    document.getElementById("categoryDetailList").innerHTML = txns.length
+      ? renderGroupedTransactions(txns)
+      : '<div class="empty-state">No transactions in this category yet.</div>';
+
+    attachTxnRowHandlers(document.getElementById("categoryDetailList"), txns);
+    document.getElementById("categoryDetail").classList.add("open");
+  }
+  document.getElementById("closeCategoryDetail").addEventListener("click", () => {
+    document.getElementById("categoryDetail").classList.remove("open");
+  });
+
+  /* ================= Transactions tab ================= */
+  function renderTransactionsTab() {
+    const txns = (dashboardData.transactions || []).slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+    document.getElementById("transactionsList").innerHTML = txns.length
+      ? renderGroupedTransactions(txns)
+      : '<div class="empty-state">No transactions logged yet.</div>';
+    attachTxnRowHandlers(document.getElementById("transactionsList"), txns);
+  }
+
+  function renderGroupedTransactions(txns) {
+    const groups = {};
+    const order = [];
+    txns.forEach(t => {
+      const key = fmtDate(t.date);
+      if (!groups[key]) { groups[key] = []; order.push(key); }
+      groups[key].push(t);
+    });
+    return order.map(key => `
+      <div class="date-group">
+        <div class="date-label">${key}</div>
+        ${groups[key].map(t => renderTxnRow(t, txns.indexOf(t))).join("")}
+      </div>
+    `).join("");
+  }
+
+  function renderTxnRow(t, idx) {
+    const val = Number(t.value) || 0;
+    const valClass = val < 0 ? "neg" : "pos";
+    const color = t.budgetCategory ? catColor(t.budgetCategory) : "var(--text-faint)";
+    return `
+      <div class="txn-row" data-idx="${idx}" style="--cat-color:${color}">
+        <div class="txn-dot"></div>
+        <div class="txn-mid">
+          <div class="txn-cat">${t.budgetCategory || t.type}</div>
+          ${t.details ? `<div class="txn-details">${t.details}</div>` : ""}
+        </div>
+        <div class="txn-value ${valClass}">${fmtMoney(val)}</div>
+      </div>
+    `;
+  }
+
+  function attachTxnRowHandlers(container, txns) {
+    container.querySelectorAll(".txn-row").forEach(row => {
+      row.addEventListener("click", () => {
+        const t = txns[parseInt(row.dataset.idx)];
+        openTxnDetail(t);
+      });
+    });
+  }
+
+  function openTxnDetail(t) {
+    renderTxnDetailView(t);
+    document.getElementById("txnDetailOverlay").classList.add("open");
+  }
+  document.getElementById("closeTxnDetail").addEventListener("click", () => {
+    document.getElementById("txnDetailOverlay").classList.remove("open");
+  });
+
+  function renderTxnDetailView(t) {
+    const body = document.getElementById("txnDetailBody");
+    body.innerHTML = `
+      <div class="detail-kv">
+        <div><span class="k">Date</span><span class="v">${fmtDate(t.date)}</span></div>
+        <div><span class="k">Type</span><span class="v">${t.type}</span></div>
+        <div><span class="k">Category</span><span class="v">${t.budgetCategory || "-"}</span></div>
+        <div><span class="k">Sub-category</span><span class="v">${t.subCategory || "-"}</span></div>
+        <div><span class="k">Value</span><span class="v">${fmtMoney(t.value)}</span></div>
+        <div><span class="k">Account</span><span class="v">${t.account || "-"}</span></div>
+        <div><span class="k">Details</span><span class="v">${t.details || "-"}</span></div>
+        <div><span class="k">Comments</span><span class="v">${t.comments || "-"}</span></div>
+      </div>
+      <div class="detail-actions">
+        <button class="btn-secondary" id="editTxnBtn">Edit</button>
+        <button class="btn-danger" id="deleteTxnBtn">Delete</button>
+      </div>
+      <div id="editFormHolder"></div>
+    `;
+    document.getElementById("editTxnBtn").addEventListener("click", () => {
+      document.getElementById("editFormHolder").style.display = "block";
+      document.querySelector(".detail-kv").style.display = "none";
+      document.querySelector(".detail-actions").style.display = "none";
+      createEntryForm(document.getElementById("editFormHolder"), {
+        initial: {
+          type: t.type,
+          budgetCategory: t.budgetCategory,
+          subCategory: t.subCategory,
+          details: t.details,
+          value: t.value,
+          account: t.account,
+          comments: t.comments,
+          date: isoToInputValue(t.date)
+        },
+        submitLabel: "Save changes",
+        showDelete: true,
+        onSubmit: async (payload) => {
+          payload.action = "update";
+          payload.rowNumber = t.row;
+          const result = await sendToScript(payload);
+          if (result.success) {
+            dashboardData = result;
+            renderBudgetTab();
+            renderTransactionsTab();
+            document.getElementById("txnDetailOverlay").classList.remove("open");
+          }
+          return result;
+        },
+        onDelete: async () => {
+          const result = await sendToScript({ key: SECRET_KEY, action: "delete", rowNumber: t.row });
+          if (result.success) {
+            dashboardData = result;
+            renderBudgetTab();
+            renderTransactionsTab();
+            document.getElementById("txnDetailOverlay").classList.remove("open");
+          }
+          return result;
+        }
+      });
+    });
+    document.getElementById("deleteTxnBtn").addEventListener("click", async () => {
+      if (!confirm("Delete this transaction? This can't be undone.")) return;
+      const result = await sendToScript({ key: SECRET_KEY, action: "delete", rowNumber: t.row });
+      if (result.success) {
+        dashboardData = result;
+        renderBudgetTab();
+        renderTransactionsTab();
+        document.getElementById("txnDetailOverlay").classList.remove("open");
+      }
+    });
+  }
+
+  /* ================= Shared network helper ================= */
+  async function sendToScript(payload) {
+    try {
+      const response = await fetch(SCRIPT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(payload)
+      });
+      return await response.json();
+    } catch (err) {
+      return { success: false, error: "Connection failed" };
+    }
+  }
+
+  /* ================= Shared entry form builder ================= */
+  function createEntryForm(container, opts) {
+    const initial = opts.initial || {};
+    let currentType = initial.type || "Expense";
+    let selectedCategory = initial.budgetCategory || null;
+    let forceNegative = Number(initial.value) < 0 && (currentType === "Income" || currentType === "Transfer In");
+
+    container.innerHTML = `
+      <div class="amount-row">
+        <span class="dollar-sign">$</span>
+        <input type="text" inputmode="decimal" class="amount-input" placeholder="0.00">
+        <button type="button" class="sign-toggle">&minus;</button>
+      </div>
+      <div class="type-row"></div>
+      <div class="field cat-field">
+        <label>Budget category</label>
+        <div class="chip-group cat-chips"></div>
+      </div>
+      <div class="field subcat-field">
+        <label>Sub-category</label>
+        <div class="chip-group subcat-chips"></div>
+      </div>
+      <div class="field">
+        <label>Date</label>
+        <input type="date" class="date-input">
+      </div>
+      <div class="field">
+        <label>Account</label>
+        <div class="chip-group account-chips"></div>
+      </div>
+      <div class="field">
+        <label>Details</label>
+        <input type="text" class="details-input" placeholder="What was it for?">
+      </div>
+      <div class="toggle-details-btn">+ Add a comment</div>
+      <div class="extra-fields-wrap">
+        <div class="field"><label>Comments</label><textarea class="comments-input" rows="2" placeholder="Optional note"></textarea></div>
+      </div>
+      <button class="submit-btn"></button>
+      <button class="delete-btn" style="display:none;">Delete transaction</button>
+      <div class="form-result"></div>
+    `;
+
+    const amountInput = container.querySelector(".amount-input");
+    const signToggle = container.querySelector(".sign-toggle");
+    const typeRow = container.querySelector(".type-row");
+    const catField = container.querySelector(".cat-field");
+    const catChips = container.querySelector(".cat-chips");
+    const subcatField = container.querySelector(".subcat-field");
+    const subcatChips = container.querySelector(".subcat-chips");
+    const dateInput = container.querySelector(".date-input");
+    const accountChips = container.querySelector(".account-chips");
+    const detailsInput = container.querySelector(".details-input");
+    const toggleBtn = container.querySelector(".toggle-details-btn");
+    const extraWrap = container.querySelector(".extra-fields-wrap");
+    const commentsInput = container.querySelector(".comments-input");
+    const submitBtn = container.querySelector(".submit-btn");
+    const deleteBtn = container.querySelector(".delete-btn");
+    const resultEl = container.querySelector(".form-result");
+
+    let selectedSubCategory = initial.subCategory || null;
+    let selectedAccount = initial.account || ACCOUNTS[0];
+
+    amountInput.value = initial.value !== undefined && initial.value !== null ? Math.abs(Number(initial.value)).toFixed(2) : "";
+    dateInput.value = initial.date || todayInputValue();
+    detailsInput.value = initial.details || "";
+    commentsInput.value = initial.comments || "";
+    submitBtn.textContent = opts.submitLabel || "Log it";
+    if (opts.showDelete) deleteBtn.style.display = "block";
+
+    function renderAccountChips() {
+      accountChips.innerHTML = "";
+      ACCOUNTS.forEach(a => {
+        const chip = document.createElement("div");
+        chip.className = "chip chip-sm" + (a === selectedAccount ? " selected" : "");
+        chip.textContent = a;
+        chip.addEventListener("click", () => {
+          selectedAccount = a;
+          renderAccountChips();
+        });
+        accountChips.appendChild(chip);
+      });
+    }
+    renderAccountChips();
+
+    ["Expense", "Income", "Transfer Out", "Transfer In"].forEach(type => {
+      const btn = document.createElement("div");
+      btn.className = "type-btn" + (type === currentType ? " active" : "");
+      btn.dataset.type = type;
+      btn.textContent = type;
+      btn.addEventListener("click", () => {
+        typeRow.querySelectorAll(".type-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        currentType = type;
+        renderCategoryUI();
+        updateSignToggleVisual();
+      });
+      typeRow.appendChild(btn);
+    });
+
+    function renderCategoryUI() {
+      if (currentType === "Transfer Out" || currentType === "Transfer In") {
+        catField.style.display = "none";
+        subcatField.style.display = "none";
+        selectedCategory = null;
+        return;
+      }
+      catField.style.display = "block";
+      const opts2 = CATEGORIES[currentType] || [];
+      if (!opts2.includes(selectedCategory)) selectedCategory = opts2[0];
+
+      catChips.innerHTML = "";
+      opts2.forEach(o => {
+        const chip = document.createElement("div");
+        chip.className = "chip" + (o === selectedCategory ? " selected" : "");
+        chip.textContent = o;
+        chip.addEventListener("click", () => {
+          selectedCategory = o;
+          renderCategoryUI();
+        });
+        catChips.appendChild(chip);
+      });
+
+      if (currentType === "Expense") {
+        subcatField.style.display = "block";
+        const subOpts = SUB_CATEGORY_MAP[selectedCategory] || [];
+        if (!subOpts.includes(selectedSubCategory)) selectedSubCategory = subOpts[0] || null;
+
+        subcatChips.innerHTML = "";
+        subOpts.forEach(s => {
+          const chip = document.createElement("div");
+          chip.className = "chip chip-sm" + (s === selectedSubCategory ? " selected" : "");
+          chip.textContent = s;
+          chip.addEventListener("click", () => {
+            selectedSubCategory = s;
+            renderCategoryUI();
+          });
+          subcatChips.appendChild(chip);
+        });
+      } else {
+        subcatField.style.display = "none";
+        selectedSubCategory = null;
+      }
+    }
+    renderCategoryUI();
+
+    function updateSignToggleVisual() {
+      signToggle.classList.toggle("active", forceNegative);
+    }
+    updateSignToggleVisual();
+    signToggle.addEventListener("click", () => {
+      forceNegative = !forceNegative;
+      updateSignToggleVisual();
+    });
+
+    toggleBtn.addEventListener("click", () => {
+      const open = extraWrap.classList.toggle("open");
+      toggleBtn.textContent = open ? "- Hide comment" : "+ Add a comment";
+    });
+    if (initial.comments) {
+      extraWrap.classList.add("open");
+      toggleBtn.textContent = "- Hide comment";
+    }
+
+    function computeSignedValue() {
+      const numeric = parseFloat(amountInput.value);
+      if (isNaN(numeric)) return null;
+      if (forceNegative) return -Math.abs(numeric);
+      if (currentType === "Expense" || currentType === "Transfer Out") return -Math.abs(numeric);
+      return Math.abs(numeric);
+    }
+
+    submitBtn.addEventListener("click", async () => {
+      const signedValue = computeSignedValue();
+      if (signedValue === null) {
+        resultEl.className = "form-result show";
+        resultEl.innerHTML = '<div class="label">Error</div><div class="value"><span class="error-text">Enter a valid amount</span></div>';
+        return;
+      }
+      const payload = {
+        key: SECRET_KEY,
+        type: currentType,
+        budgetCategory: selectedCategory || "",
+        subCategory: currentType === "Expense" ? (selectedSubCategory || "") : "",
+        details: detailsInput.value,
+        value: signedValue,
+        account: selectedAccount || "",
+        comments: commentsInput.value,
+        date: dateInput.value
+      };
+
+      submitBtn.disabled = true;
+      const originalLabel = submitBtn.textContent;
+      submitBtn.textContent = "Saving...";
+
+      const data = await opts.onSubmit(payload);
+
+      if (data.success) {
+        if (data.remainingBudget !== undefined) {
+          resultEl.className = "form-result show" + (data.remainingBudget < 0 ? " negative" : " positive");
+          resultEl.innerHTML = `<div class="label">${data.remainingLabel || "Remaining"} remaining</div><div class="value">${fmtMoney(data.remainingBudget)}</div>`;
+          amountInput.value = "";
+          detailsInput.value = "";
+          commentsInput.value = "";
+        }
+      } else {
+        resultEl.className = "form-result show";
+        resultEl.innerHTML = `<div class="label">Error</div><div class="value"><span class="error-text">${data.error || "Something went wrong"}</span></div>`;
+      }
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalLabel;
+    });
+
+    if (opts.showDelete && opts.onDelete) {
+      deleteBtn.addEventListener("click", async () => {
+        if (!confirm("Delete this transaction? This can't be undone.")) return;
+        await opts.onDelete();
+      });
+    }
+  }
+
+  /* ================= Log tab init ================= */
+  createEntryForm(document.getElementById("logFormContainer"), {
+    initial: { type: "Expense", date: todayInputValue() },
+    submitLabel: "Log it",
+    onSubmit: async (payload) => {
+      const result = await sendToScript(payload);
+      if (result.success) loadDashboard();
+      return result;
+    }
+  });
+
+  loadDashboard();
+</script>
+</body>
+</html>
