@@ -28,6 +28,16 @@
 
     --accent-lavender: #8b8cf5;
   }
+
+  :root[data-theme="light"] {
+    --bg: #f4f5f7;
+    --panel: #ffffff;
+    --panel-2: #eceff3;
+    --border: #dde1e7;
+    --text: #14171c;
+    --text-dim: #565f6c;
+    --text-faint: #939cab;
+  }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
     margin: 0; padding: 0;
@@ -79,6 +89,18 @@
   }
   .refresh-btn.spinning { animation: spin 0.7s linear infinite; }
   @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  .theme-toggle-btn {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text-dim);
+    font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
 
   /* ---------- Budget tab ---------- */
   .month-nav {
@@ -201,6 +223,7 @@
     font-family: inherit; outline: none; appearance: none; -webkit-appearance: none;
   }
   input[type="date"] { color-scheme: dark; }
+  :root[data-theme="light"] input[type="date"] { color-scheme: light; }
   select {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238b949e' stroke-width='1.5' fill='none' fill-rule='evenodd'/%3E%3C/svg%3E");
     background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px;
@@ -231,6 +254,10 @@
     border: 1px solid var(--border); border-radius: 20px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
     display: flex; padding: 8px 4px calc(env(safe-area-inset-bottom) * 0.4 + 8px);
+  }
+  :root[data-theme="light"] .tab-bar {
+    background: rgba(255, 255, 255, 0.85);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   }
   .tab-item { flex: 1; text-align: center; color: var(--text-faint); font-size: 11px; font-weight: 600; cursor: pointer; padding: 4px 0 2px; }
   .tab-item.active { color: var(--income); }
@@ -264,6 +291,7 @@
     <div class="header">
       <span class="brand"><span class="status-dot"></span>Budget</span>
       <div class="header-right">
+        <button class="theme-toggle-btn" id="themeToggleBudget"></button>
         <button class="refresh-btn" id="refreshBudget">&#8635;</button>
       </div>
     </div>
@@ -291,7 +319,10 @@
   <div class="screen" id="screen-transactions" style="position: relative;">
     <div class="header">
       <span class="brand"><span class="status-dot"></span>Transactions</span>
-      <button class="refresh-btn" id="refreshTxns">&#8635;</button>
+      <div class="header-right">
+        <button class="theme-toggle-btn" id="themeToggleTxns"></button>
+        <button class="refresh-btn" id="refreshTxns">&#8635;</button>
+      </div>
     </div>
     <div id="transactionsList"><div class="loading">Loading...</div></div>
 
@@ -306,7 +337,10 @@
 
   <!-- ============ LOG TAB ============ -->
   <div class="screen" id="screen-log">
-    <div class="header"><span class="brand"><span class="status-dot"></span>Log</span></div>
+    <div class="header">
+      <span class="brand"><span class="status-dot"></span>Log</span>
+      <button class="theme-toggle-btn" id="themeToggleLog"></button>
+    </div>
     <div id="logFormContainer"></div>
   </div>
 
@@ -1065,6 +1099,29 @@
       if (result.success) loadDashboard();
       return result;
     }
+  });
+
+  /* ================= Theme toggle ================= */
+  const SUN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="12" cy="12" r="4.5"></circle><line x1="12" y1="2" x2="12" y2="4.5"></line><line x1="12" y1="19.5" x2="12" y2="22"></line><line x1="4.2" y1="4.2" x2="6" y2="6"></line><line x1="18" y1="18" x2="19.8" y2="19.8"></line><line x1="2" y1="12" x2="4.5" y2="12"></line><line x1="19.5" y1="12" x2="22" y2="12"></line><line x1="4.2" y1="19.8" x2="6" y2="18"></line><line x1="18" y1="6" x2="19.8" y2="4.2"></line></svg>';
+  const MOON_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M20.5 13.4A8.5 8.5 0 1 1 10.6 3.5a7 7 0 0 0 9.9 9.9z"></path></svg>';
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute("data-theme", theme);
+    const icon = theme === "dark" ? SUN_ICON : MOON_ICON;
+    ["themeToggleBudget", "themeToggleTxns", "themeToggleLog"].forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) btn.innerHTML = icon;
+    });
+    localStorage.setItem("ledger_theme", theme);
+  }
+  let currentTheme = localStorage.getItem("ledger_theme") || "dark";
+  applyTheme(currentTheme);
+  ["themeToggleBudget", "themeToggleTxns", "themeToggleLog"].forEach(id => {
+    const btn = document.getElementById(id);
+    if (btn) btn.addEventListener("click", () => {
+      currentTheme = currentTheme === "dark" ? "light" : "dark";
+      applyTheme(currentTheme);
+    });
   });
 
   loadDashboard();
