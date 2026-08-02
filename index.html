@@ -168,6 +168,14 @@
   /* ---------- Transaction rows ---------- */
   .date-group { margin-bottom: 18px; }
   .date-group .date-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); margin-bottom: 8px; font-weight: 600; }
+  .balance-group-label {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--accent-lavender);
+    margin-bottom: 8px;
+    font-weight: 700;
+  }
   .txn-row { display: flex; align-items: center; gap: 10px; background: var(--panel); border-radius: 10px; padding: 12px 14px; margin-bottom: 6px; cursor: pointer; }
   .txn-row:active { background: var(--panel-2); }
   .txn-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--cat-color, var(--text-faint)); }
@@ -344,9 +352,23 @@
     <div id="logFormContainer"></div>
   </div>
 
+  <!-- ============ BALANCES TAB ============ -->
+  <div class="screen" id="screen-balances">
+    <div class="header">
+      <span class="brand"><span class="status-dot"></span>Balances</span>
+      <div class="header-right">
+        <button class="theme-toggle-btn" id="themeToggleBalances"></button>
+        <button class="refresh-btn" id="refreshBalances">&#8635;</button>
+      </div>
+    </div>
+    <div id="balancesTotal" class="totals-strip"></div>
+    <div id="balancesList"><div class="loading">Loading...</div></div>
+  </div>
+
   <div class="tab-bar">
     <div class="tab-item active" data-tab="budget"><span class="icon">&#9635;</span>Budget</div>
     <div class="tab-item" data-tab="transactions"><span class="icon">&#8801;</span>Activity</div>
+    <div class="tab-item" data-tab="balances"><span class="icon">&#9679;</span>Balances</div>
     <div class="tab-item" data-tab="log"><span class="icon">&#43;</span>Log</div>
   </div>
 
@@ -489,6 +511,7 @@
         dashboardData = data;
         renderBudgetTab();
         renderTransactionsTab();
+        renderBalancesTab();
       }
     } catch (err) {
       document.getElementById("budgetCards").innerHTML = '<div class="empty-state">Couldn\'t load data. Try refreshing.</div>';
@@ -499,6 +522,7 @@
   }
   document.getElementById("refreshBudget").addEventListener("click", (e) => loadDashboard(e.currentTarget));
   document.getElementById("refreshTxns").addEventListener("click", (e) => loadDashboard(e.currentTarget));
+  document.getElementById("refreshBalances").addEventListener("click", (e) => loadDashboard(e.currentTarget));
 
   /* ================= Budget tab: month navigation ================= */
   let selectedMonth = new Date();
@@ -632,6 +656,54 @@
     attachTxnRowHandlers(document.getElementById("transactionsList"), txns);
   }
 
+  /* ================= Balances tab ================= */
+  function isCreditAccount(accountName) {
+    return /credit card/i.test(accountName || "");
+  }
+
+  function renderAccountRow(b) {
+    const bal = Number(b.currentBalance) || 0;
+    const cls = bal < 0 ? "neg" : "pos";
+    return `
+      <div class="txn-row" style="cursor:default;">
+        <div class="txn-dot" style="--cat-color: var(--accent-lavender);"></div>
+        <div class="txn-mid"><div class="txn-cat">${b.account}</div></div>
+        <div class="txn-value ${cls}">${fmtMoney(bal)}</div>
+      </div>
+    `;
+  }
+
+  function renderBalancesTab() {
+    const balances = (dashboardData.balances || []).slice().sort((a, b) => a.account.localeCompare(b.account));
+
+    const debitAccounts = balances.filter(b => !isCreditAccount(b.account));
+    const creditAccounts = balances.filter(b => isCreditAccount(b.account));
+
+    const debitTotal = debitAccounts.reduce((s, b) => s + (Number(b.currentBalance) || 0), 0);
+    const creditTotal = creditAccounts.reduce((s, b) => s + (Number(b.currentBalance) || 0), 0);
+    const netTotal = debitTotal + creditTotal;
+
+    document.getElementById("balancesTotal").innerHTML = `
+      <div class="stat" style="text-align:center; width:100%;"><div class="num" style="color:${netTotal < 0 ? 'var(--danger)' : 'var(--income)'}">${fmtMoney(netTotal)}</div><div class="lbl">Net</div></div>
+    `;
+
+    if (!balances.length) {
+      document.getElementById("balancesList").innerHTML = '<div class="empty-state">No accounts found. Add rows to the Account Balances tab in your sheet.</div>';
+      return;
+    }
+
+    let html = "";
+    html += `<div class="date-group"><div class="balance-group-label" style="color:${debitTotal < 0 ? 'var(--danger)' : 'var(--income)'}">Debit &middot; ${fmtMoney(debitTotal)}</div>`;
+    html += debitAccounts.length ? debitAccounts.map(renderAccountRow).join("") : '<div class="empty-state">No debit accounts.</div>';
+    html += `</div>`;
+
+    html += `<div class="date-group"><div class="balance-group-label" style="color:${creditTotal < 0 ? 'var(--danger)' : 'var(--income)'}">Credit &middot; ${fmtMoney(creditTotal)}</div>`;
+    html += creditAccounts.length ? creditAccounts.map(renderAccountRow).join("") : '<div class="empty-state">No credit accounts.</div>';
+    html += `</div>`;
+
+    document.getElementById("balancesList").innerHTML = html;
+  }
+
   function renderGroupedTransactions(txns) {
     const groups = {};
     const order = [];
@@ -725,6 +797,7 @@
             dashboardData = result;
             renderBudgetTab();
             renderTransactionsTab();
+            renderBalancesTab();
             document.getElementById("txnDetailOverlay").classList.remove("open");
           }
           return result;
@@ -735,6 +808,7 @@
             dashboardData = result;
             renderBudgetTab();
             renderTransactionsTab();
+            renderBalancesTab();
             document.getElementById("txnDetailOverlay").classList.remove("open");
           }
           return result;
@@ -748,6 +822,7 @@
         dashboardData = result;
         renderBudgetTab();
         renderTransactionsTab();
+        renderBalancesTab();
         document.getElementById("txnDetailOverlay").classList.remove("open");
       }
     });
@@ -1108,7 +1183,7 @@
   function applyTheme(theme) {
     document.documentElement.setAttribute("data-theme", theme);
     const icon = theme === "dark" ? SUN_ICON : MOON_ICON;
-    ["themeToggleBudget", "themeToggleTxns", "themeToggleLog"].forEach(id => {
+    ["themeToggleBudget", "themeToggleTxns", "themeToggleLog", "themeToggleBalances"].forEach(id => {
       const btn = document.getElementById(id);
       if (btn) btn.innerHTML = icon;
     });
@@ -1116,7 +1191,7 @@
   }
   let currentTheme = localStorage.getItem("ledger_theme") || "dark";
   applyTheme(currentTheme);
-  ["themeToggleBudget", "themeToggleTxns", "themeToggleLog"].forEach(id => {
+  ["themeToggleBudget", "themeToggleTxns", "themeToggleLog", "themeToggleBalances"].forEach(id => {
     const btn = document.getElementById(id);
     if (btn) btn.addEventListener("click", () => {
       currentTheme = currentTheme === "dark" ? "light" : "dark";
