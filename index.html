@@ -161,6 +161,7 @@
     padding: env(safe-area-inset-top) 16px 24px; overflow-y: auto;
   }
   .detail-overlay.open { display: flex; }
+  .detail-overlay-fixed { position: fixed; z-index: 90; }
   .detail-header { display: flex; align-items: center; gap: 10px; padding: 20px 0 16px; }
   .back-btn { background: var(--panel); border: 1px solid var(--border); color: var(--text); border-radius: 10px; width: 36px; height: 36px; font-size: 18px; cursor: pointer; flex-shrink: 0; }
   .detail-header .title { font-size: 17px; font-weight: 600; }
@@ -333,14 +334,6 @@
       </div>
     </div>
     <div id="transactionsList"><div class="loading">Loading...</div></div>
-
-    <div class="detail-overlay" id="txnDetailOverlay">
-      <div class="detail-header">
-        <button class="back-btn" id="closeTxnDetail">&#8592;</button>
-        <div class="title">Details</div>
-      </div>
-      <div id="txnDetailBody"></div>
-    </div>
   </div>
 
   <!-- ============ LOG TAB ============ -->
@@ -353,7 +346,7 @@
   </div>
 
   <!-- ============ BALANCES TAB ============ -->
-  <div class="screen" id="screen-balances">
+  <div class="screen" id="screen-balances" style="position: relative;">
     <div class="header">
       <span class="brand"><span class="status-dot"></span>Balances</span>
       <div class="header-right">
@@ -363,6 +356,14 @@
     </div>
     <div id="balancesTotal" class="totals-strip"></div>
     <div id="balancesList"><div class="loading">Loading...</div></div>
+
+    <div class="detail-overlay" id="accountDetail">
+      <div class="detail-header">
+        <button class="back-btn" id="closeAccountDetail">&#8592;</button>
+        <div class="title" id="accountDetailTitle">Account</div>
+      </div>
+      <div id="accountDetailList"></div>
+    </div>
   </div>
 
   <div class="tab-bar">
@@ -370,6 +371,14 @@
     <div class="tab-item" data-tab="transactions"><span class="icon">&#8801;</span>Activity</div>
     <div class="tab-item" data-tab="balances"><span class="icon">&#9679;</span>Balances</div>
     <div class="tab-item" data-tab="log"><span class="icon">&#43;</span>Log</div>
+  </div>
+
+  <div class="detail-overlay detail-overlay-fixed" id="txnDetailOverlay">
+    <div class="detail-header">
+      <button class="back-btn" id="closeTxnDetail">&#8592;</button>
+      <div class="title">Details</div>
+    </div>
+    <div id="txnDetailBody"></div>
   </div>
 
 </div>
@@ -665,7 +674,7 @@
     const bal = Number(b.currentBalance) || 0;
     const cls = bal < 0 ? "neg" : "pos";
     return `
-      <div class="txn-row" style="cursor:default;">
+      <div class="txn-row account-row" data-account="${b.account}">
         <div class="txn-dot" style="--cat-color: var(--accent-lavender);"></div>
         <div class="txn-mid"><div class="txn-cat">${b.account}</div></div>
         <div class="txn-value ${cls}">${fmtMoney(bal)}</div>
@@ -702,7 +711,28 @@
     html += `</div>`;
 
     document.getElementById("balancesList").innerHTML = html;
+
+    document.querySelectorAll(".account-row").forEach(row => {
+      row.addEventListener("click", () => openAccountDetail(row.dataset.account));
+    });
   }
+
+  function openAccountDetail(accountName) {
+    const txns = (dashboardData.transactions || [])
+      .filter(t => t.account === accountName)
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    document.getElementById("accountDetailTitle").textContent = accountName;
+    document.getElementById("accountDetailList").innerHTML = txns.length
+      ? renderGroupedTransactions(txns)
+      : '<div class="empty-state">No transactions for this account yet.</div>';
+
+    attachTxnRowHandlers(document.getElementById("accountDetailList"), txns);
+    document.getElementById("accountDetail").classList.add("open");
+  }
+  document.getElementById("closeAccountDetail").addEventListener("click", () => {
+    document.getElementById("accountDetail").classList.remove("open");
+  });
 
   function renderGroupedTransactions(txns) {
     const groups = {};
