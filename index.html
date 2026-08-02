@@ -262,7 +262,7 @@
     background: rgba(22, 27, 34, 0.78); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
     border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 999px;
     box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25);
-    display: flex; padding: 10px 8px calc(env(safe-area-inset-bottom) * 0.4 + 10px);
+    display: flex; padding: 6px 6px calc(env(safe-area-inset-bottom) * 0.4 + 6px);
   }
   :root[data-theme="light"] .tab-bar {
     background: rgba(255, 255, 255, 0.78);
@@ -270,15 +270,15 @@
     box-shadow: 0 14px 34px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06);
   }
   .tab-item {
-    flex: 1; text-align: center; color: var(--text-faint); font-size: 11px; font-weight: 600;
-    cursor: pointer; padding: 8px 4px; border-radius: 16px;
+    flex: 1; text-align: center; color: var(--text-faint); font-size: 10.5px; font-weight: 600;
+    cursor: pointer; padding: 5px 4px; border-radius: 999px;
     transition: background 0.15s ease, color 0.15s ease;
   }
   .tab-item.active { color: var(--income); background: rgba(45, 212, 167, 0.14); }
   .tab-item .icon {
-    font-size: 18px; width: 34px; height: 34px; border-radius: 50%;
+    font-size: 16px; width: 28px; height: 28px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    margin: 0 auto 3px; transition: transform 0.15s ease;
+    margin: 0 auto 2px; transition: transform 0.15s ease;
   }
   .tab-item.active .icon { transform: scale(1.05); }
 </style>
