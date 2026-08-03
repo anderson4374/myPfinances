@@ -195,43 +195,43 @@
   .checklist-card {
     background: var(--panel);
     border: 1px solid var(--accent-lavender);
-    border-radius: 14px;
-    padding: 14px;
-    margin-bottom: 18px;
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin-bottom: 14px;
   }
   .checklist-title {
-    font-size: 12px;
+    font-size: 10.5px;
     font-weight: 700;
     color: var(--accent-lavender);
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    margin-bottom: 10px;
+    margin-bottom: 4px;
   }
   .checklist-row {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 9px 0;
+    gap: 8px;
+    padding: 6px 0;
     border-bottom: 1px solid var(--border);
     cursor: pointer;
   }
   .checklist-row:last-child { border-bottom: none; }
   .checklist-checkbox {
-    width: 20px; height: 20px;
-    border-radius: 6px;
+    width: 16px; height: 16px;
+    border-radius: 5px;
     border: 2px solid var(--border);
     flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
-    font-size: 12px;
+    font-size: 10px;
     color: var(--bg);
     font-weight: 700;
   }
   .checklist-checkbox.checked { background: var(--income); border-color: var(--income); }
   .checklist-checkbox.checked::after { content: "\2713"; }
-  .checklist-mid { flex: 1; min-width: 0; }
-  .checklist-name { font-size: 13px; color: var(--text); }
-  .checklist-day { font-size: 11px; color: var(--text-faint); margin-top: 1px; }
-  .checklist-value { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; font-weight: 600; color: var(--text-dim); flex-shrink: 0; }
+  .checklist-mid { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 5px; overflow: hidden; }
+  .checklist-name { font-size: 12.5px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .checklist-day { font-size: 10.5px; color: var(--text-faint); flex-shrink: 0; }
+  .checklist-value { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; font-weight: 600; color: var(--text-dim); flex-shrink: 0; }
   .checklist-row.done .checklist-name, .checklist-row.done .checklist-value { opacity: 0.5; text-decoration: line-through; }
 
   .loading { text-align: center; color: var(--text-faint); padding: 40px 0; font-size: 13px; }
@@ -723,8 +723,8 @@
         <div class="checklist-row${checked ? ' done' : ''}" data-name="${item.details}">
           <div class="checklist-checkbox${checked ? ' checked' : ''}"></div>
           <div class="checklist-mid">
-            <div class="checklist-name">${item.details}</div>
-            <div class="checklist-day">Day ${item.dayOfMonth}</div>
+            <span class="checklist-name">${item.details}</span>
+            <span class="checklist-day">&middot; Day ${item.dayOfMonth}</span>
           </div>
           <div class="checklist-value">${fmtMoney(item.value)}</div>
         </div>
