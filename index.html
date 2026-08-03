@@ -190,6 +190,50 @@
   .txn-value.pos { color: var(--income); }
 
   .empty-state { text-align: center; color: var(--text-faint); padding: 60px 20px; font-size: 14px; }
+
+  /* ---------- Recurring checklist card ---------- */
+  .checklist-card {
+    background: var(--panel);
+    border: 1px solid var(--accent-lavender);
+    border-radius: 14px;
+    padding: 14px;
+    margin-bottom: 18px;
+  }
+  .checklist-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent-lavender);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 10px;
+  }
+  .checklist-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .checklist-row:last-child { border-bottom: none; }
+  .checklist-checkbox {
+    width: 20px; height: 20px;
+    border-radius: 6px;
+    border: 2px solid var(--border);
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px;
+    color: var(--bg);
+    font-weight: 700;
+  }
+  .checklist-checkbox.checked { background: var(--income); border-color: var(--income); }
+  .checklist-checkbox.checked::after { content: "\2713"; }
+  .checklist-mid { flex: 1; min-width: 0; }
+  .checklist-name { font-size: 13px; color: var(--text); }
+  .checklist-day { font-size: 11px; color: var(--text-faint); margin-top: 1px; }
+  .checklist-value { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; font-weight: 600; color: var(--text-dim); flex-shrink: 0; }
+  .checklist-row.done .checklist-name, .checklist-row.done .checklist-value { opacity: 0.5; text-decoration: line-through; }
+
   .loading { text-align: center; color: var(--text-faint); padding: 40px 0; font-size: 13px; }
 
   /* ---------- Read-only detail view ---------- */
@@ -639,7 +683,75 @@
     });
   }
 
+  let currentCategoryDetail = null;
+
+  function monthKeyFor(monthDate) {
+    return monthDate.getFullYear() + "-" + String(monthDate.getMonth() + 1).padStart(2, "0");
+  }
+  function getChecklistOverrides(monthDate) {
+    try {
+      const raw = localStorage.getItem("ledger_checklist_" + monthKeyFor(monthDate));
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) { return {}; }
+  }
+  function setChecklistOverride(monthDate, name, checked) {
+    const overrides = getChecklistOverrides(monthDate);
+    overrides[name] = checked;
+    localStorage.setItem("ledger_checklist_" + monthKeyFor(monthDate), JSON.stringify(overrides));
+  }
+  function isRecurringPaidThisMonth(detailsName, monthDate) {
+    const year = monthDate.getFullYear();
+    const month = monthDate.getMonth();
+    return (dashboardData.transactions || []).some(t => {
+      if (t.details !== detailsName) return false;
+      const d = new Date(t.date);
+      return d.getFullYear() === year && d.getMonth() === month;
+    });
+  }
+
+  function renderChecklistCard(category, monthDate) {
+    const items = (dashboardData.recurring || []).filter(r => r.budgetCategory === category);
+    if (!items.length) return "";
+
+    const overrides = getChecklistOverrides(monthDate);
+
+    const rowsHtml = items.map(item => {
+      const autoChecked = isRecurringPaidThisMonth(item.details, monthDate);
+      const hasOverride = Object.prototype.hasOwnProperty.call(overrides, item.details);
+      const checked = hasOverride ? overrides[item.details] : autoChecked;
+      return `
+        <div class="checklist-row${checked ? ' done' : ''}" data-name="${item.details}">
+          <div class="checklist-checkbox${checked ? ' checked' : ''}"></div>
+          <div class="checklist-mid">
+            <div class="checklist-name">${item.details}</div>
+            <div class="checklist-day">Day ${item.dayOfMonth}</div>
+          </div>
+          <div class="checklist-value">${fmtMoney(item.value)}</div>
+        </div>
+      `;
+    }).join("");
+
+    return `
+      <div class="checklist-card">
+        <div class="checklist-title">This Month's Checklist</div>
+        ${rowsHtml}
+      </div>
+    `;
+  }
+
+  function attachChecklistHandlers(category) {
+    document.querySelectorAll(".checklist-row").forEach(row => {
+      row.addEventListener("click", () => {
+        const name = row.dataset.name;
+        const isChecked = row.querySelector(".checklist-checkbox").classList.contains("checked");
+        setChecklistOverride(selectedMonth, name, !isChecked);
+        openCategoryDetail(category);
+      });
+    });
+  }
+
   function openCategoryDetail(category) {
+    currentCategoryDetail = category;
     const year = selectedMonth.getFullYear();
     const month = selectedMonth.getMonth();
     const txns = (dashboardData.transactions || [])
@@ -652,10 +764,15 @@
 
     const titleSuffix = isCurrentMonth(selectedMonth) ? "" : " \u00b7 " + selectedMonth.toLocaleDateString(undefined, { month: "short", year: "numeric" });
     document.getElementById("categoryDetailTitle").textContent = category + titleSuffix;
-    document.getElementById("categoryDetailList").innerHTML = txns.length
+
+    const checklistHtml = renderChecklistCard(category, selectedMonth);
+    const txnHtml = txns.length
       ? renderGroupedTransactions(txns)
       : '<div class="empty-state">No transactions in this category for this month.</div>';
 
+    document.getElementById("categoryDetailList").innerHTML = checklistHtml + txnHtml;
+
+    attachChecklistHandlers(category);
     attachTxnRowHandlers(document.getElementById("categoryDetailList"), txns);
     document.getElementById("categoryDetail").classList.add("open");
   }
